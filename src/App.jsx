@@ -1,35 +1,58 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from "react";
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+// Electron'un renderer tarafı
+let ipcRenderer;
+try {
+  ipcRenderer = window.require && window.require("electron").ipcRenderer;
+} catch {
+  console.warn("Electron ortamında değil, ipcRenderer yok");
+  ipcRenderer = null;
 }
 
-export default App
+function App() {
+  const [status, setStatus] = useState("");
+
+  const handleConnect = async () => {
+    try {
+      setStatus("Bağlanılıyor...");
+      const result = await ipcRenderer.invoke("connect-obd");
+      if (result.success) {
+        setStatus("✅ " + result.message);
+      } else {
+        setStatus("❌ " + result.message);
+      }
+    } catch (err) {
+      setStatus("Hata: " + err.message);
+    }
+  };
+
+  const handleListPorts = async () => {
+    try {
+      setStatus("Portlar alınıyor...");
+      const result = await ipcRenderer.invoke("list-ports");
+      if (result.success) {
+        const ports = result.data.join(", ");
+        setStatus("🔌 Bulunan Portlar: " + ports);
+      } else {
+        setStatus("❌ " + result.message);
+      }
+    } catch (err) {
+      setStatus("Hata: " + err.message);
+    }
+  };
+
+  return (
+    <div style={{ textAlign: "center", marginTop: "3rem" }}>
+      <h2>Car Project — OBD Bağlantı Paneli</h2>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: "1rem" }}>
+        <button onClick={handleConnect}>OBD’ye Bağlan</button>
+        <button onClick={handleListPorts}>Portları Listele</button>
+      </div>
+
+      <p style={{ marginTop: "1rem" }}>{status}</p>
+    </div>
+  );
+}
+
+export default App;
