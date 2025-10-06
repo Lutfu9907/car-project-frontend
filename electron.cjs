@@ -92,6 +92,27 @@ ipcMain.handle("license-reset", async () => {
     return { ok: false, message: "Reset error: " + err.message };
   }
 });
+// 🔧 Arıza Kodlarını Oku
+ipcMain.handle("dtc-read", async () => {
+  try {
+    const res = await api.get("/vag/dtc");
+    return { success: true, data: res.data };
+  } catch (err) {
+    console.error("DTC read error:", err.message);
+    return { success: false, message: err.message };
+  }
+});
+
+// 🔧 Arıza Kodlarını Sil
+ipcMain.handle("dtc-clear", async () => {
+  try {
+    const res = await api.post("/vag/dtc/clear");
+    return { success: true, message: res.data };
+  } catch (err) {
+    console.error("DTC clear error:", err.message);
+    return { success: false, message: err.message };
+  }
+});
 
 function createWindow() {
   mainWindow = new BrowserWindow({

@@ -21,6 +21,15 @@ function App() {
   const [status, setStatus] = useState("Henüz bağlanılmadı");
   const [rpm, setRpm] = useState(null);
   const [connected, setConnected] = useState(false);
+  const [dtcList, setDtcList] = useState([]);
+
+  // Arıza koduna göre satır rengi belirle
+  const getSeverityColor = (code) => {
+    if (!code) return "#fff";
+    if (code.startsWith("P0") || code.startsWith("U0")) return "#ffcccc"; // Kritik (Motor / Ağ hatası)
+    if (code.startsWith("P1")) return "#fff5cc"; // Orta (Performans / Sensör uyarısı)
+    return "#e8f5e9"; // Hafif (bilgilendirme)
+  };
 
   // --- Lisans durumunu uygulama acilisinda kontrol et ---
   useEffect(() => {
@@ -118,7 +127,6 @@ function App() {
       const res = await ipcRenderer.invoke("license-activate", payload);
       setLicenseMsg(res.message || "");
       setLicenseOk(!!res.ok);
-      
     } catch (e) {
       setLicenseMsg("Activate error: " + e.message);
       setLicenseOk(false);
@@ -209,10 +217,10 @@ function App() {
                 const res = await ipcRenderer.invoke("license-reset");
                 alert(res?.message || "Lisans reset istegi gönderildi");
 
-                // 2) hemen backend'den güncel durumu çek
+                // 2) backend'den güncel durumu aldık
                 const status = await ipcRenderer.invoke("license-status");
 
-                // 3) input ve lisans state'lerini temizle/güncelle
+                // 3) input ve lisans state'lerini temizle
                 setKeyInput("");
                 setOwnerInput("");
                 setHwInput("");
@@ -224,9 +232,8 @@ function App() {
                 );
                 setLicenseChecked(true); // kontrol tamamlandı
 
-                // 4) eğer demo moddaysa formu göster; eğer full moddaysa başarı bildirimi
+                // 4) eğer demo moddaysa formu göster
                 if (!status?.ok) {
-                  // demo: kullanıcı doğrudan yeni anahtarı girebilsin
                   console.log("Demo moda gecildi, form aktif.");
                 } else {
                   console.log("Hemen tekrar full moda gecildi.");
@@ -248,7 +255,7 @@ function App() {
         </div>
       )}
 
-      {/* OBD panel (demo modda da gosteriyoruz; istersen disable edebiliriz) */}
+      {/* OBD panel (demo modda da gosteriyoruz) */}
       <div style={styles.card}>
         <label style={styles.label}>OBD Port Seç:</label>
         <select
@@ -269,7 +276,7 @@ function App() {
           <button
             onClick={handleConnect}
             style={styles.connectBtn}
-            disabled={!licenseOk /* full mod sart olsun istersen true yap */}
+            disabled={!licenseOk}
           >
             Bağlan
           </button>
@@ -285,6 +292,83 @@ function App() {
           <div style={styles.rpmBox}>
             <h3>RPM: {rpm ?? "--"}</h3>
           </div>
+        )}
+      </div>
+
+      {/* 🔧 Arıza Kodları Paneli */}
+      <div style={styles.card}>
+        <h3>Arıza Kodları</h3>
+
+        <div style={{ marginBottom: 12 }}>
+          <button
+            style={styles.connectBtn}
+            onClick={async () => {
+              try {
+                const res = await ipcRenderer.invoke("dtc-read");
+                if (res.success && Array.isArray(res.data)) {
+                  if (res.data.length === 0) {
+                    setDtcList([]); // liste boş
+                    setStatus("Arıza kodu bulunamadı ✅");
+                  } else {
+                    setDtcList(res.data);
+                    setStatus(`${res.data.length} adet arıza kodu bulundu ⚠️`);
+                  }
+                } else {
+                  setStatus("Arıza kodları okunamadı!");
+                }
+              } catch (err) {
+                setStatus("Arıza kodu okuma hatası: " + err.message);
+              }
+            }}
+          >
+            Arıza Kodlarını Oku
+          </button>
+
+          <button
+            style={styles.disconnectBtn}
+            onClick={async () => {
+              try {
+                const res = await ipcRenderer.invoke("dtc-clear");
+                if (res.success) {
+                  setDtcList([]); // tabloyu sıfırla
+                  setStatus(res.message || "Arıza kodları silindi.");
+                } else {
+                  setStatus("Silme işlemi başarısız!");
+                }
+              } catch (err) {
+                setStatus("Silme hatası: " + err.message);
+              }
+            }}
+          >
+            Arıza Kodlarını Sil
+          </button>
+        </div>
+
+        {/* Tablo görünümü */}
+        {dtcList && dtcList.length > 0 ? (
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Kod</th>
+                <th style={styles.th}>Açıklama</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dtcList.map((d, i) => (
+                <tr
+                  key={i}
+                  style={{ backgroundColor: getSeverityColor(d.code) }}
+                >
+                  <td style={styles.td}>{d.code}</td>
+                  <td style={styles.td}>{d.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p style={{ color: "#555", marginTop: 10 }}>
+            Henüz arıza kodu bulunmuyor.
+          </p>
         )}
       </div>
     </div>
@@ -413,6 +497,26 @@ const styles = {
     fontSize: "18px",
     width: 250,
     margin: "15px auto 0 auto",
+  },
+  table: {
+    width: "100%",
+    borderCollapse: "collapse",
+    marginTop: "10px",
+    boxShadow: "0 0 10px rgba(0,0,0,0.1)",
+    borderRadius: "6px",
+    overflow: "hidden",
+  },
+  th: {
+    backgroundColor: "#1976d2",
+    color: "white",
+    padding: "8px",
+    border: "1px solid #ccc",
+    textAlign: "center",
+  },
+  td: {
+    padding: "8px",
+    border: "1px solid #ccc",
+    textAlign: "center",
   },
 };
 
