@@ -1,5 +1,24 @@
 import { useEffect, useState } from "react";
+import {
+  Box,
+  Grid,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  TextField,
+  MenuItem,
+  Alert,
+} from "@mui/material";
+import Select from "@mui/material/Select";
+import Divider from "@mui/material/Divider";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
 
+// Electron IPC
 const { ipcRenderer } = window.require
   ? window.require("electron")
   : { ipcRenderer: null };
@@ -22,14 +41,6 @@ function App() {
   const [rpm, setRpm] = useState(null);
   const [connected, setConnected] = useState(false);
   const [dtcList, setDtcList] = useState([]);
-
-  // Arıza koduna göre satır rengi belirle
-  const getSeverityColor = (code) => {
-    if (!code) return "#fff";
-    if (code.startsWith("P0") || code.startsWith("U0")) return "#ffcccc"; // Kritik (Motor / Ağ hatası)
-    if (code.startsWith("P1")) return "#fff5cc"; // Orta (Performans / Sensör uyarısı)
-    return "#e8f5e9"; // Hafif (bilgilendirme)
-  };
 
   // --- Lisans durumunu uygulama acilisinda kontrol et ---
   useEffect(() => {
@@ -144,234 +155,270 @@ function App() {
   }
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.header}> OBD PANEL </h2>
-
-      {/* Lisans banner */}
-      <div
-        style={{
-          ...styles.banner,
-          backgroundColor: licenseOk ? "#e8f5e9" : "#fff3e0",
-          borderColor: licenseOk ? "#2e7d32" : "#ff9800",
+    <Box
+      sx={{
+        minHeight: "100vh",
+        backgroundColor: "#0A1929",
+        color: "#E0E6ED",
+        p: 4,
+      }}
+    >
+      <Typography
+        variant="h4"
+        align="center"
+        sx={{
+          fontWeight: 700,
+          mb: 4,
+          color: "#E6EDF3",
+          textShadow: "0 0 4px rgba(255,255,255,0.3)",
         }}
       >
-        <strong>{licenseOk ? "Full Mod Aktif" : "Demo Mod"}</strong>
-        <div style={{ marginTop: 6 }}>{licenseMsg}</div>
-      </div>
+        🚗 OBD Panel Dashboard
+      </Typography>
 
-      {/* Lisans Giriş Formu (sadece lisans yoksa) */}
-      {!licenseOk && (
-        <form onSubmit={handleActivate} style={styles.card}>
-          <h3>Lisans Anahtarını Gir</h3>
-          <input
-            style={styles.input}
-            placeholder="Lisans Anahtarı (ABCD-1234-...)"
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value.toUpperCase())}
-          />
-          <input
-            style={styles.input}
-            placeholder="Sahip (opsiyonel)"
-            value={ownerInput}
-            onChange={(e) => setOwnerInput(e.target.value)}
-          />
-          <input
-            style={styles.input}
-            placeholder="Cihaz ID (opsiyonel)"
-            value={hwInput}
-            onChange={(e) => setHwInput(e.target.value)}
-          />
-          <button type="submit" style={styles.activateBtn}>
-            Lisansı Etkinleştir
-          </button>
-        </form>
-      )}
-
-      {/* ✅ Lisans Bilgilerini Göster butonu */}
-      {licenseOk && (
-        <div style={styles.card}>
-          <h3>Lisans Bilgileri</h3>
-          <button
-            style={styles.activateBtn}
-            onClick={async () => {
-              const res = await ipcRenderer.invoke("license-details");
-              if (res.success && res.data) {
-                alert(
-                  `📄 Lisans Bilgileri:\n\n` +
-                    `Sahip: ${res.data.owner}\n` +
-                    `Donanım ID: ${res.data.hardwareId}\n` +
-                    `Geçerli Tarih: ${res.data.validUntil}`
-                );
-              } else {
-                alert("Lisans bilgileri okunamadı!");
-              }
+      <Grid
+        container
+        spacing={3}
+        justifyContent="center"
+        maxWidth="lg"
+        sx={{ margin: "0 auto" }}
+      >
+        {/* SOL SÜTUN - LİSANS */}
+        <Grid item xs={12} md={5}>
+          {/* Lisans Durumu */}
+          <Card
+            sx={{
+              backgroundColor: licenseOk ? "#1B4332" : "#432818",
+              borderLeft: licenseOk ? "4px solid #2E8B57" : "4px solid #D97706",
+              color: "#fff",
+              p: 2,
+              mb: 2,
+              boxShadow: "0 2px 10px rgba(0,0,0,0.4)",
             }}
           >
-            Lisans Bilgilerini Göster
-          </button>
-          <button
-            style={styles.disconnectBtn}
-            onClick={async () => {
-              try {
-                // 1) backend'e reset isteği
-                const res = await ipcRenderer.invoke("license-reset");
-                alert(res?.message || "Lisans reset istegi gönderildi");
+            <Typography variant="h6">
+              {licenseOk ? "✅ Full Mod Aktif" : "⚠️ Demo Mod"}
+            </Typography>
+            <Typography variant="body2">{licenseMsg}</Typography>
+          </Card>
 
-                // 2) backend'den güncel durumu aldık
-                const status = await ipcRenderer.invoke("license-status");
-
-                // 3) input ve lisans state'lerini temizle
-                setKeyInput("");
-                setOwnerInput("");
-                setHwInput("");
-
-                setLicenseOk(!!status?.ok);
-                setLicenseMsg(
-                  status?.message ||
-                    (status?.ok ? "Lisans aktif" : "Demo moda gecildi")
-                );
-                setLicenseChecked(true); // kontrol tamamlandı
-
-                // 4) eğer demo moddaysa formu göster
-                if (!status?.ok) {
-                  console.log("Demo moda gecildi, form aktif.");
-                } else {
-                  console.log("Hemen tekrar full moda gecildi.");
-                }
-              } catch (err) {
-                console.error("License reset error:", err);
-                alert("Lisans sıfırlama sırasında hata: " + err?.message);
-                // fallback: formu aç
-                setLicenseOk(false);
-                setLicenseChecked(true);
-                setKeyInput("");
-                setOwnerInput("");
-                setHwInput("");
-              }
-            }}
-          >
-            Lisansı Sıfırla
-          </button>
-        </div>
-      )}
-
-      {/* OBD panel (demo modda da gosteriyoruz) */}
-      <div style={styles.card}>
-        <label style={styles.label}>OBD Port Seç:</label>
-        <select
-          value={selectedPort}
-          onChange={(e) => setSelectedPort(e.target.value)}
-          style={styles.select}
-          disabled={connected}
-        >
-          <option value="">Port seç...</option>
-          {ports.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-
-        {!connected ? (
-          <button
-            onClick={handleConnect}
-            style={styles.connectBtn}
-            disabled={!licenseOk}
-          >
-            Bağlan
-          </button>
-        ) : (
-          <button onClick={handleDisconnect} style={styles.disconnectBtn}>
-            Bağlantıyı Kes
-          </button>
-        )}
-
-        <p style={styles.status}>{status}</p>
-
-        {connected && (
-          <div style={styles.rpmBox}>
-            <h3>RPM: {rpm ?? "--"}</h3>
-          </div>
-        )}
-      </div>
-
-      {/* 🔧 Arıza Kodları Paneli */}
-      <div style={styles.card}>
-        <h3>Arıza Kodları</h3>
-
-        <div style={{ marginBottom: 12 }}>
-          <button
-            style={styles.connectBtn}
-            onClick={async () => {
-              try {
-                const res = await ipcRenderer.invoke("dtc-read");
-                if (res.success && Array.isArray(res.data)) {
-                  if (res.data.length === 0) {
-                    setDtcList([]); // liste boş
-                    setStatus("Arıza kodu bulunamadı ✅");
-                  } else {
-                    setDtcList(res.data);
-                    setStatus(`${res.data.length} adet arıza kodu bulundu ⚠️`);
-                  }
-                } else {
-                  setStatus("Arıza kodları okunamadı!");
-                }
-              } catch (err) {
-                setStatus("Arıza kodu okuma hatası: " + err.message);
-              }
-            }}
-          >
-            Arıza Kodlarını Oku
-          </button>
-
-          <button
-            style={styles.disconnectBtn}
-            onClick={async () => {
-              try {
-                const res = await ipcRenderer.invoke("dtc-clear");
-                if (res.success) {
-                  setDtcList([]); // tabloyu sıfırla
-                  setStatus(res.message || "Arıza kodları silindi.");
-                } else {
-                  setStatus("Silme işlemi başarısız!");
-                }
-              } catch (err) {
-                setStatus("Silme hatası: " + err.message);
-              }
-            }}
-          >
-            Arıza Kodlarını Sil
-          </button>
-        </div>
-
-        {/* Tablo görünümü */}
-        {dtcList && dtcList.length > 0 ? (
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Kod</th>
-                <th style={styles.th}>Açıklama</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dtcList.map((d, i) => (
-                <tr
-                  key={i}
-                  style={{ backgroundColor: getSeverityColor(d.code) }}
+          {/* Lisans Girişi */}
+          {!licenseOk && (
+            <Card sx={{ backgroundColor: "#1E293B", p: 3, mb: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Lisans Anahtarını Gir
+              </Typography>
+              <Box component="form" onSubmit={handleActivate}>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  placeholder="Lisans Anahtarı (ABCD-1234-...)"
+                  value={keyInput}
+                  onChange={(e) => setKeyInput(e.target.value.toUpperCase())}
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  placeholder="Sahip (opsiyonel)"
+                  value={ownerInput}
+                  onChange={(e) => setOwnerInput(e.target.value)}
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  placeholder="Cihaz ID (opsiyonel)"
+                  value={hwInput}
+                  onChange={(e) => setHwInput(e.target.value)}
+                  sx={{ mb: 2 }}
+                />
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  fullWidth
                 >
-                  <td style={styles.td}>{d.code}</td>
-                  <td style={styles.td}>{d.description}</td>
-                </tr>
+                  Lisansı Etkinleştir
+                </Button>
+              </Box>
+            </Card>
+          )}
+
+          {/* Lisans Bilgileri */}
+          {licenseOk && (
+            <Card sx={{ backgroundColor: "#1E293B", p: 3, mb: 3 }}>
+              <Typography variant="h6">Lisans İşlemleri</Typography>
+              <Divider sx={{ my: 1, borderColor: "#555" }} />
+              <Box sx={{ display: "flex", gap: 2 }}>
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={async () => {
+                    const res = await ipcRenderer.invoke("license-details");
+                    if (res.success && res.data) {
+                      alert(
+                        `📄 Lisans Bilgileri:\n\n` +
+                          `Sahip: ${res.data.owner}\n` +
+                          `Donanım ID: ${res.data.hardwareId}\n` +
+                          `Geçerli Tarih: ${res.data.validUntil}`
+                      );
+                    } else {
+                      alert("Lisans bilgileri okunamadı!");
+                    }
+                  }}
+                >
+                  Lisans Bilgilerini Göster
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={async () => {
+                    const res = await ipcRenderer.invoke("license-reset");
+                    alert(res.message);
+                    window.location.reload();
+                  }}
+                >
+                  Lisansı Sıfırla
+                </Button>
+              </Box>
+            </Card>
+          )}
+        </Grid>
+
+        {/* SAĞ SÜTUN - OBD & ARIZA */}
+        <Grid item xs={12} md={7}>
+          {/* OBD Port Kartı */}
+          <Card sx={{ backgroundColor: "#1E293B", p: 3, mb: 3 }}>
+            <Typography variant="h6">OBD Bağlantısı</Typography>
+            <Divider sx={{ my: 1, borderColor: "#555" }} />
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              OBD Port Seç:
+            </Typography>
+            <Select
+              value={selectedPort}
+              onChange={(e) => setSelectedPort(e.target.value)}
+              sx={{
+                bgcolor: "#2c2c2c",
+                color: "#fff",
+                mb: 2,
+                minWidth: 200,
+              }}
+            >
+              <MenuItem value="">Port seç...</MenuItem>
+              {ports.map((p) => (
+                <MenuItem key={p} value={p}>
+                  {p}
+                </MenuItem>
               ))}
-            </tbody>
-          </table>
-        ) : (
-          <p style={{ color: "#555", marginTop: 10 }}>
-            Henüz arıza kodu bulunmuyor.
-          </p>
-        )}
-      </div>
-    </div>
+            </Select>
+
+            {!connected ? (
+              <Button
+                variant="contained"
+                color="success"
+                disabled={!licenseOk}
+                onClick={handleConnect}
+              >
+                Bağlan
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleDisconnect}
+              >
+                Bağlantıyı Kes
+              </Button>
+            )}
+
+            <Alert
+              severity="info"
+              sx={{ mt: 2, backgroundColor: "#E3F2FD", color: "#000" }}
+            >
+              {status}
+            </Alert>
+
+            {connected && (
+              <Typography variant="h5" sx={{ mt: 2, color: "#4caf50" }}>
+                RPM: {rpm ?? "--"}
+              </Typography>
+            )}
+          </Card>
+
+          {/* Arıza Kodları */}
+          <Card sx={{ backgroundColor: "#1E293B", p: 3 }}>
+            <Typography variant="h6">Arıza Kodları</Typography>
+            <Divider sx={{ my: 1, borderColor: "#555" }} />
+            <Box sx={{ mb: 2, display: "flex", gap: 2 }}>
+              <Button
+                variant="contained"
+                color="info"
+                onClick={async () => {
+                  const res = await ipcRenderer.invoke("dtc-read");
+                  if (res.success && Array.isArray(res.data)) {
+                    if (res.data.length === 0) {
+                      setDtcList([]);
+                      setStatus("Arıza kodu bulunamadı ✅");
+                    } else {
+                      setDtcList(res.data);
+                      setStatus(
+                        `${res.data.length} adet arıza kodu bulundu ⚠️`
+                      );
+                    }
+                  } else {
+                    setStatus("Arıza kodları okunamadı!");
+                  }
+                }}
+              >
+                Arıza Kodlarını Oku
+              </Button>
+
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={async () => {
+                  const res = await ipcRenderer.invoke("dtc-clear");
+                  if (res.success) {
+                    setDtcList([]);
+                    setStatus(res.message || "Arıza kodları silindi.");
+                  } else {
+                    setStatus("Silme işlemi başarısız!");
+                  }
+                }}
+              >
+                Arıza Kodlarını Sil
+              </Button>
+            </Box>
+
+            {dtcList && dtcList.length > 0 ? (
+              <Table sx={{ bgcolor: "#222" }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ color: "#ccc" }}>Kod</TableCell>
+                    <TableCell sx={{ color: "#ccc" }}>Açıklama</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {dtcList.map((d, i) => (
+                    <TableRow key={i}>
+                      <TableCell sx={{ color: "#fff" }}>{d.code}</TableCell>
+                      <TableCell sx={{ color: "#fff" }}>
+                        {d.description}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <Typography variant="body2" sx={{ color: "#aaa" }}>
+                Henüz arıza kodu bulunmuyor.
+              </Typography>
+            )}
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
   );
 }
 

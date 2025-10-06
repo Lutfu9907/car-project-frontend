@@ -27,7 +27,6 @@ ipcMain.handle("connect-obd", async () => {
     return { success: false, message: error.message };
   }
 });
-
 // RPM oku
 ipcMain.handle("read-rpm", async () => {
   try {
