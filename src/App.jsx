@@ -18,7 +18,7 @@ function App() {
   // OBD state
   const [ports, setPorts] = useState([]);
   const [selectedPort, setSelectedPort] = useState("");
-  const [status, setStatus] = useState("Henuz baglanilmadi");
+  const [status, setStatus] = useState("Henüz bağlanılmadı");
   const [rpm, setRpm] = useState(null);
   const [connected, setConnected] = useState(false);
 
@@ -31,7 +31,7 @@ function App() {
         setLicenseMsg(res.message || "");
       } catch (e) {
         setLicenseOk(false);
-        setLicenseMsg("License status cekilemedi: " + e.message);
+        setLicenseMsg("License status çekilemedi: " + e.message);
       } finally {
         setLicenseChecked(true);
       }
@@ -44,7 +44,7 @@ function App() {
       try {
         const result = await ipcRenderer.invoke("list-ports");
         if (result.success) setPorts(result.data);
-        else setStatus("Portlar alinamiadi: " + result.message);
+        else setStatus("Portlar alınamadı: " + result.message);
       } catch (e) {
         setStatus("Hata: " + e.message);
       }
@@ -54,17 +54,17 @@ function App() {
   // --- Baglan ---
   const handleConnect = async () => {
     if (!selectedPort) {
-      setStatus("Lutfen bir port seciniz!");
+      setStatus("Lütfen bir port seçiniz!");
       return;
     }
     try {
-      setStatus("Baglaniyor...");
+      setStatus("Bağlanıyor...");
       const result = await ipcRenderer.invoke("connect-obd");
       if (result.success) {
         setConnected(true);
-        setStatus("Baglanti basarili ✅");
+        setStatus("Baglantı başarılı ✅");
       } else {
-        setStatus("Baglanti hatasi ❌: " + result.message);
+        setStatus("Bağlantı hatası ❌: " + result.message);
       }
     } catch (e) {
       setStatus("Hata: " + e.message);
@@ -78,9 +78,9 @@ function App() {
       if (result.success) {
         setConnected(false);
         setRpm(null);
-        setStatus("Baglanti sonlandirildi ❎");
+        setStatus("Bağlantı sonlandırıldı ❎");
       } else {
-        setStatus("Baglanti kesilemedi ❌: " + result.message);
+        setStatus("Bağlantı kesilemedi ❌: " + result.message);
       }
     } catch (e) {
       setStatus("Hata: " + e.message);
@@ -94,9 +94,9 @@ function App() {
       try {
         const res = await ipcRenderer.invoke("read-rpm");
         if (res.success) setRpm(res.rpm);
-        else setStatus("RPM hatasi: " + res.message);
+        else setStatus("RPM hatası: " + res.message);
       } catch (e) {
-        setStatus("RPM hatasi: " + e.message);
+        setStatus("RPM hatası: " + e.message);
       }
     }, 1500);
     return () => clearInterval(timer);
@@ -106,7 +106,7 @@ function App() {
   const handleActivate = async (e) => {
     e.preventDefault();
     if (!keyInput.trim()) {
-      setLicenseMsg("Lisans anahtari bos olamaz.");
+      setLicenseMsg("Lisans anahtarı boş olamaz.");
       return;
     }
     try {
@@ -118,6 +118,7 @@ function App() {
       const res = await ipcRenderer.invoke("license-activate", payload);
       setLicenseMsg(res.message || "");
       setLicenseOk(!!res.ok);
+      
     } catch (e) {
       setLicenseMsg("Activate error: " + e.message);
       setLicenseOk(false);
@@ -136,7 +137,7 @@ function App() {
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.header}>Car Project — OBD Panel</h2>
+      <h2 style={styles.header}> OBD PANEL </h2>
 
       {/* Lisans banner */}
       <div
@@ -153,10 +154,10 @@ function App() {
       {/* Lisans Giriş Formu (sadece lisans yoksa) */}
       {!licenseOk && (
         <form onSubmit={handleActivate} style={styles.card}>
-          <h3>Lisans Anahtari Gir</h3>
+          <h3>Lisans Anahtarını Gir</h3>
           <input
             style={styles.input}
-            placeholder="Lisans Anahtari (ABCD-1234-...)"
+            placeholder="Lisans Anahtarı (ABCD-1234-...)"
             value={keyInput}
             onChange={(e) => setKeyInput(e.target.value.toUpperCase())}
           />
@@ -190,11 +191,11 @@ function App() {
                 alert(
                   `📄 Lisans Bilgileri:\n\n` +
                     `Sahip: ${res.data.owner}\n` +
-                    `Donanim ID: ${res.data.hardwareId}\n` +
-                    `Gecerli Tarih: ${res.data.validUntil}`
+                    `Donanım ID: ${res.data.hardwareId}\n` +
+                    `Geçerli Tarih: ${res.data.validUntil}`
                 );
               } else {
-                alert("Lisans bilgileri okunamadi!");
+                alert("Lisans bilgileri okunamadı!");
               }
             }}
           >
@@ -203,9 +204,43 @@ function App() {
           <button
             style={styles.disconnectBtn}
             onClick={async () => {
-              const res = await ipcRenderer.invoke("license-reset");
-              alert(res.message);
-              window.location.reload(); // Uygulama yeniden "demo" moduna geçer
+              try {
+                // 1) backend'e reset isteği
+                const res = await ipcRenderer.invoke("license-reset");
+                alert(res?.message || "Lisans reset istegi gönderildi");
+
+                // 2) hemen backend'den güncel durumu çek
+                const status = await ipcRenderer.invoke("license-status");
+
+                // 3) input ve lisans state'lerini temizle/güncelle
+                setKeyInput("");
+                setOwnerInput("");
+                setHwInput("");
+
+                setLicenseOk(!!status?.ok);
+                setLicenseMsg(
+                  status?.message ||
+                    (status?.ok ? "Lisans aktif" : "Demo moda gecildi")
+                );
+                setLicenseChecked(true); // kontrol tamamlandı
+
+                // 4) eğer demo moddaysa formu göster; eğer full moddaysa başarı bildirimi
+                if (!status?.ok) {
+                  // demo: kullanıcı doğrudan yeni anahtarı girebilsin
+                  console.log("Demo moda gecildi, form aktif.");
+                } else {
+                  console.log("Hemen tekrar full moda gecildi.");
+                }
+              } catch (err) {
+                console.error("License reset error:", err);
+                alert("Lisans sıfırlama sırasında hata: " + err?.message);
+                // fallback: formu aç
+                setLicenseOk(false);
+                setLicenseChecked(true);
+                setKeyInput("");
+                setOwnerInput("");
+                setHwInput("");
+              }
             }}
           >
             Lisansı Sıfırla
@@ -215,14 +250,14 @@ function App() {
 
       {/* OBD panel (demo modda da gosteriyoruz; istersen disable edebiliriz) */}
       <div style={styles.card}>
-        <label>OBD Port Sec:</label>
+        <label style={styles.label}>OBD Port Seç:</label>
         <select
           value={selectedPort}
           onChange={(e) => setSelectedPort(e.target.value)}
           style={styles.select}
           disabled={connected}
         >
-          <option value="">Port sec...</option>
+          <option value="">Port seç...</option>
           {ports.map((p) => (
             <option key={p} value={p}>
               {p}
@@ -236,11 +271,11 @@ function App() {
             style={styles.connectBtn}
             disabled={!licenseOk /* full mod sart olsun istersen true yap */}
           >
-            Baglan
+            Bağlan
           </button>
         ) : (
           <button onClick={handleDisconnect} style={styles.disconnectBtn}>
-            Baglantiyi Kes
+            Bağlantıyı Kes
           </button>
         )}
 
@@ -257,66 +292,127 @@ function App() {
 }
 
 const styles = {
-  container: { textAlign: "center", marginTop: "3rem", fontFamily: "Arial" },
-  header: { color: "#333" },
+  container: {
+    textAlign: "center",
+    marginTop: "2rem",
+    fontFamily: "'Inter', 'Segoe UI', Arial, sans-serif",
+    backgroundColor: "#f7f9fb",
+    minHeight: "100vh",
+  },
+  header: {
+    color: "#1e3a8a",
+    fontWeight: "700",
+    marginBottom: "2rem",
+    fontSize: "1.6rem",
+  },
   banner: {
     display: "inline-block",
-    padding: "10px 16px",
-    border: "1px solid",
-    borderRadius: 6,
-    marginBottom: 16,
-    minWidth: 360,
+    padding: "16px 24px",
+    border: "2px solid",
+    borderRadius: 10,
+    marginBottom: 20,
+    minWidth: 420,
     textAlign: "left",
+    fontSize: "15px",
+    fontWeight: "500",
+    boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+    color: "#111",
   },
   card: {
     display: "inline-block",
-    padding: "20px 40px",
-    border: "1px solid #ccc",
-    borderRadius: "8px",
-    backgroundColor: "#f9f9f9",
-    margin: "8px",
+    padding: "25px 40px",
+    border: "1px solid #d1d5db",
+    borderRadius: "12px",
+    backgroundColor: "#ffffff",
+    margin: "16px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+    textAlign: "center",
   },
   input: {
     display: "block",
-    width: 300,
-    margin: "8px auto",
-    padding: "8px",
+    width: 320,
+    margin: "10px auto",
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: "1px solid #9ca3af",
+    fontSize: "14px",
+    outline: "none",
   },
-  select: { margin: "10px", padding: "5px" },
-  activateBtn: {
-    marginTop: 8,
-    padding: "8px 20px",
+  select: {
+    margin: "10px",
+    padding: "10px 14px",
+    borderRadius: 8,
+    border: "1px solid #4b5563",
+    backgroundColor: "#ffffff",
+    color: "#111827",
+    fontWeight: "500",
+    fontSize: "14px",
     cursor: "pointer",
-    backgroundColor: "#1976d2",
+    outline: "none",
+    transition: "all 0.2s ease",
+  },
+  activateBtn: {
+    marginTop: 10,
+    padding: "10px 25px",
+    cursor: "pointer",
+    backgroundColor: "#2563eb",
     color: "white",
     border: "none",
-    borderRadius: "4px",
+    borderRadius: "8px",
+    fontWeight: "600",
+    fontSize: "14px",
+    transition: "all 0.2s ease",
   },
   connectBtn: {
-    margin: "10px",
-    padding: "8px 20px",
+    margin: "12px 8px",
+    padding: "10px 25px",
     cursor: "pointer",
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#16a34a",
     color: "white",
     border: "none",
-    borderRadius: "4px",
+    borderRadius: "8px",
+    fontWeight: "600",
+    fontSize: "14px",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+    transition: "all 0.2s ease",
   },
   disconnectBtn: {
-    margin: "10px",
-    padding: "8px 20px",
+    margin: "12px 8px",
+    padding: "10px 25px",
     cursor: "pointer",
-    backgroundColor: "#f44336",
+    backgroundColor: "#dc2626",
     color: "white",
     border: "none",
-    borderRadius: "4px",
+    borderRadius: "8px",
+    fontWeight: "600",
+    fontSize: "14px",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+    transition: "all 0.2s ease",
   },
-  status: { marginTop: "10px", color: "#444" },
+  label: {
+    display: "block",
+    fontWeight: "600",
+    color: "#1e293b",
+    marginBottom: "8px",
+    fontSize: "15px",
+  },
+  status: {
+    marginTop: "10px",
+    color: "#1f2937",
+    fontSize: "15px",
+    fontWeight: "500",
+  },
   rpmBox: {
     marginTop: "20px",
-    backgroundColor: "#fff",
-    border: "1px solid #aaa",
-    padding: "10px",
-    borderRadius: "6px",
+    background: "linear-gradient(180deg, #e0f2fe 0%, #eff6ff 100%)",
+    border: "1px solid #60a5fa",
+    padding: "14px",
+    borderRadius: "10px",
+    color: "#1e40af",
+    fontWeight: "700",
+    fontSize: "18px",
+    width: 250,
+    margin: "15px auto 0 auto",
   },
 };
 
