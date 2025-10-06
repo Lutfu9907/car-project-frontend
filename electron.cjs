@@ -112,6 +112,16 @@ ipcMain.handle("dtc-clear", async () => {
     return { success: false, message: err.message };
   }
 });
+// 🚗 Hız limitini kaldırma
+ipcMain.handle("speed-limit-remove", async () => {
+  try {
+    const res = await api.post("/vag/speed-limit/remove");
+    return { success: true, message: res.data.message };
+  } catch (err) {
+    console.error("Speed limit remove error:", err.message);
+    return { success: false, message: "Hız limiti kaldırma başarısız!" };
+  }
+});
 
 function createWindow() {
   mainWindow = new BrowserWindow({

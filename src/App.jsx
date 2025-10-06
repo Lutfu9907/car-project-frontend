@@ -416,6 +416,28 @@ function App() {
               </Typography>
             )}
           </Card>
+          {/* 🚀 Araç Özellikleri */}
+          <Card sx={{ bgcolor: "#1e1e1e", p: 3, mb: 3 }}>
+            <Typography variant="h6">Araç Özellikleri</Typography>
+            <Divider sx={{ my: 1, borderColor: "#555" }} />
+
+            <Box sx={{ display: "flex", gap: 2 }}>
+              <Button
+                variant="contained"
+                color="warning"
+                onClick={async () => {
+                  const res = await ipcRenderer.invoke("speed-limit-remove");
+                  if (res.success) {
+                    alert("✅ " + res.message);
+                  } else {
+                    alert("❌ " + res.message);
+                  }
+                }}
+              >
+                Hız Limitini Kaldır
+              </Button>
+            </Box>
+          </Card>
         </Grid>
       </Grid>
     </Box>
